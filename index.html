@@ -106,10 +106,10 @@
             text-align: center; font-size: 12px; color: #94a3b8;
         }
         .start-marker { left: 0%; transform: translateX(0); text-align: left;}
-        .end-marker { right: 100%; transform: translateX(-100%); text-align: right; }
+        .end-marker { right: 0; transform: translateX(0); text-align: right; }
         .time-marker::before { content: ''; position: absolute; top: -15px; left: 50%; width: 2px; height: 10px; background-color: #475569; }
         .start-marker::before { left: 0; }
-        .end-marker::before { left: 100%; }
+        .end-marker::before { left: 0; }
 
         .block {
             box-sizing: border-box; border-right: 1px solid rgba(0,0,0,0.3); border-radius: 4px; color: #fff;
