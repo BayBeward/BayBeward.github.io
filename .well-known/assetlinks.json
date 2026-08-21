@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "io.github.baybeward.twa",
+        "sha256_cert_fingerprints": ["A0:06:7F:D6:2D:35:4A:5E:EB:B5:86:9B:5D:2F:E1:94:3F:60:E9:85:48:20:61:EF:74:A7:B1:CE:80:AD:25:57"]
+      }
+    }]
