@@ -109,7 +109,7 @@
         .end-marker { right: 0; transform: translateX(0); text-align: right; }
         .time-marker::before { content: ''; position: absolute; top: -15px; left: 50%; width: 2px; height: 10px; background-color: #475569; }
         .start-marker::before { left: 0; }
-        .end-marker::before { left: 0; }
+        .end-marker::before { left: auto; right: 0; }
 
         .block {
             box-sizing: border-box; border-right: 1px solid rgba(0,0,0,0.3); border-radius: 4px; color: #fff;
@@ -165,6 +165,61 @@
         
         .file-controls { display: flex; gap: 10px; justify-content: center; margin-top: 20px; border-top: 1px solid #334155; padding-top: 15px;}
         #saveBtn.unsaved { background-color: #ef4444; animation: pulse 2s infinite; }
+        /* === MOBİLDE DİKEY ZAMAN ÇİZELGESİ === */
+        .rail-label {
+            display: none;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #94a3b8;
+            font-weight: bold;
+            padding: 0 2px;
+        }
+
+        @media (max-width: 767px) {
+            .rail-label { display: flex; }
+            #time-axis { display: none; }
+
+            .timeline-container {
+                flex-direction: column;
+                height: auto;
+                align-items: stretch;
+                margin: 6px 0;
+            }
+
+            /* Blok içeriği yan yana: solda isim, sağda süre ve saat */
+            .timeline-container .block {
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: center;
+                padding: 6px 12px;
+                border-right: none;
+                border-bottom: 1px solid rgba(0,0,0,0.35);
+                border-radius: 6px;
+                text-align: left;
+                gap: 8px;
+            }
+            .timeline-container .block strong {
+                font-size: 15px;
+                width: auto;
+                flex: 1;
+                text-align: left;
+            }
+            .timeline-container .block .block-meta {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                flex-shrink: 0;
+            }
+            .timeline-container .block span,
+            .timeline-container .block .time-label {
+                margin-top: 0;
+                font-size: 11px;
+                white-space: nowrap;
+            }
+
+            .pool-container .block { width: 100%; }
+        }
+
         /* === PWA: güvenli alan ve yükleme butonu === */
         body {
             padding-top: calc(15px + env(safe-area-inset-top));
@@ -213,7 +268,9 @@
         <div id="pool" class="pool-container"></div>
         
         <div class="timeline-wrapper">
+            <div class="rail-label" id="railTop"><span>08:00 (Uyanma)</span><span id="railFree"></span></div>
             <div id="timeline" class="timeline-container"></div>
+            <div class="rail-label" id="railBottom"><span>01:00 (Uyku)</span></div>
             <div id="time-axis" class="time-axis">
                 <div class="time-marker start-marker" id="lblStart">08:00<br>(Uyanma)</div>
                 <div class="time-marker end-marker" id="lblEnd">01:00<br>(Uyku)</div>
@@ -486,7 +543,7 @@
                     showModal(`⚠️ Bu blok buraya sığmıyor!\nBoş vaktin: ${TOTAL_HOURS - curDur} sa`);
                     revertTouch();
                 } else {
-                    const afterElement = getDragAfterElement(timeline, touch.clientX);
+                    const afterElement = getDragAfterElement(timeline, touch.clientX, touch.clientY);
                     if(afterElement) timeline.insertBefore(touchDragEl, afterElement);
                     else timeline.appendChild(touchDragEl);
                 }
@@ -527,7 +584,7 @@
             if (curDur + parseFloat(block.dataset.duration) > TOTAL_HOURS) {
                 showModal("⚠️ Bu blok buraya sığmıyor!"); return;
             }
-            const afterElement = getDragAfterElement(document.getElementById('timeline'), e.clientX);
+            const afterElement = getDragAfterElement(document.getElementById('timeline'), e.clientX, e.clientY);
             if (afterElement) document.getElementById('timeline').insertBefore(block, afterElement);
             else document.getElementById('timeline').appendChild(block);
         });
@@ -538,11 +595,14 @@
             if(block) document.getElementById('pool').appendChild(block);
         });
 
-        function getDragAfterElement(container, x) {
+        function getDragAfterElement(container, x, y) {
+            const vertical = isVerticalMode();
             const draggables = [...container.querySelectorAll('.block:not(.dragging)')];
             return draggables.reduce((closest, child) => {
                 const box = child.getBoundingClientRect();
-                const offset = x - box.left - box.width / 2;
+                const offset = vertical
+                    ? y - box.top - box.height / 2
+                    : x - box.left - box.width / 2;
                 if (offset < 0 && offset > closest.offset) return { offset: offset, element: child };
                 else return closest;
             }, { offset: Number.NEGATIVE_INFINITY }).element;
@@ -556,13 +616,20 @@
             return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
         }
 
+        function isVerticalMode() { return window.innerWidth < 768; }
+        const PX_PER_HOUR = 46;
+
         function updateTimeline() {
             const timeline = document.getElementById('timeline');
             const pool = document.getElementById('pool');
             document.querySelectorAll('.dynamic-marker').forEach(el => el.remove());
 
+            const vertical = isVerticalMode();
+            timeline.style.height = vertical ? (TOTAL_HOURS * PX_PER_HOUR) + 'px' : '';
+
             let currentDecimalHour = START_HOUR;
             let accumulatedPercent = 0;
+            let usedHours = 0;
 
             Array.from(timeline.children).forEach(block => {
                 const dur = parseFloat(block.dataset.duration);
@@ -570,23 +637,42 @@
                 const startHourStr = formatTime(currentDecimalHour);
                 currentDecimalHour += dur;
                 const endHourStr = formatTime(currentDecimalHour);
-                
+                usedHours += dur;
+
                 accumulatedPercent += (dur / TOTAL_HOURS) * 100;
-                block.style.width = ((dur / TOTAL_HOURS) * 100) + '%';
-                block.innerHTML = `<strong>${name}</strong><span>${dur} sa</span><div class="time-label">${startHourStr}-${endHourStr}</div>`;
-                
-                if (accumulatedPercent < 97) { 
-                    const marker = document.createElement('div');
-                    marker.className = 'time-marker dynamic-marker';
-                    marker.style.left = accumulatedPercent + '%';
-                    marker.innerText = endHourStr;
-                    document.getElementById('time-axis').appendChild(marker);
+
+                if (vertical) {
+                    block.style.width = '';
+                    block.style.height = Math.max(38, dur * PX_PER_HOUR) + 'px';
+                    block.innerHTML = `<strong>${name}</strong><div class="block-meta"><span>${dur} sa</span><div class="time-label">${startHourStr}-${endHourStr}</div></div>`;
+                } else {
+                    block.style.height = '';
+                    block.style.width = ((dur / TOTAL_HOURS) * 100) + '%';
+                    block.innerHTML = `<strong>${name}</strong><span>${dur} sa</span><div class="time-label">${startHourStr}-${endHourStr}</div>`;
+
+                    if (accumulatedPercent < 97) {
+                        const marker = document.createElement('div');
+                        marker.className = 'time-marker dynamic-marker';
+                        marker.style.left = accumulatedPercent + '%';
+                        marker.innerText = endHourStr;
+                        document.getElementById('time-axis').appendChild(marker);
+                    }
                 }
             });
 
+            // Dikey moddaki üst/alt saat etiketleri
+            document.querySelector('#railTop span').innerText =
+                `${START_HOUR.toString().padStart(2,'0')}:00 (Uyanma)`;
+            document.querySelector('#railBottom span').innerText =
+                `${END_HOUR.toString().padStart(2,'0')}:00 (Uyku)`;
+            const free = Math.round((TOTAL_HOURS - usedHours) * 10) / 10;
+            document.getElementById('railFree').innerText =
+                free > 0 ? `Boş: ${free} sa` : (free < 0 ? 'Taştı!' : 'Gün dolu 🎯');
+
             Array.from(pool.children).forEach(block => {
                 const dur = parseFloat(block.dataset.duration);
-                block.style.width = (window.innerWidth < 600) ? '45%' : '100px'; 
+                block.style.height = '';
+                block.style.width = vertical ? '' : '100px';
                 block.innerHTML = `<strong>${block.dataset.name}</strong><span>${dur} sa</span>`;
             });
             saveToLocal(); // Her güncellemede arka planda sessizce kaydet
@@ -727,6 +813,13 @@
 
         // Başlangıç
         window.onload = loadFromLocal;
+
+        // Ekran döndürülünce dikey/yatay düzeni yeniden hesapla
+        let resizeTimer;
+        window.addEventListener('resize', function () {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(updateTimeline, 150);
+        });
 
         // Kapatırken uyarı (Masaüstü için)
         window.addEventListener('beforeunload', function (e) {
